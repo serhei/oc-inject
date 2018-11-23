@@ -3,7 +3,7 @@
     $ ./oc-inject <pod_ID> [-c <container_ID>] <executable>
     $ ./oc-inject <pod_ID> [-c <container_ID>] -- <executable> <args...>
 
-Copy an executable to an OpenShift container and run the executable.
+Copy an executable to an [OpenShift](https://www.openshift.com/) container and run the executable.
 
 `oc-inject` is a prototype tool for last-resort troubleshooting of a
 running container, when a required debugging tool is not present in
@@ -72,7 +72,7 @@ Or, in the other direction using `oc port-forward`:
     
     $ iperf3 -c 127.0.0.1 -p 9021
 
-... *More ideas coming soon.* ...
+... *More demos coming soon.* ...
 
 ## Troubleshooting
 
@@ -91,7 +91,7 @@ Show the list of loaded objects:
     ./oc-inject -it -v myapp-zrblm -D LD_TRACE_LOADED_OBJECTS=yes -- ls
 
 For example, you might see problems if it is trying to use the
-version `ld.so` already within the container:
+version of `ld.so` already within the container:
 
     ...
     oc exec -it nodejs-ex-1-gsc9q -- env LD_LIBRARY_PATH=/tmp/oc-inject-0b54a840 LD_TRACE_LOADED_OBJECTS=yes /tmp/oc-inject-0b54a840/ls
