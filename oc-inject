@@ -10,6 +10,7 @@ from optparse import OptionParser
 global_verbose_level = 0
 # global_verbose_level = 1 # option --verbose
 # global_verbose_level = 2 # log all actions
+# global_verbose_level = 3 # additional debug output
 def vlog(level, *args):
     if global_verbose_level >= level:
         print(*args)
@@ -20,6 +21,18 @@ ldd_regex = re.compile(r'^\s*(\S*)(?: => (\S*))? \(.*\)')
 # - <soname> => <path> (<addr>)
 # - <soname> (<addr>)
 # - <path> (<addr>)
+
+# TODO: Consider adding a command line option to blacklist modules, to
+# force usage of the so's already in the container. Not generally a
+# smart idea to mix .so's from two systems in the same executable, but
+# you never know.
+blacklist = []
+# e.g. blacklist = ["libc.so.6", "libstdc++.so.6", "libpthread.so.0", "libdl.so.2"]
+# TODO: This could be a list of glob patterns.
+
+# TODO: Identify a custom loader from the manifest instead of hardcoding x86-64.
+use_custom_loader = True
+preload_so = "ld-linux-x86-64.so.2"
 
 class Manifest:
     def __init__(self):
@@ -57,6 +70,12 @@ if __name__=="__main__":
                       help="Log the commands used to copy and run the executable")
     parser.add_option('-n', '--dry-run', action="store_true", default=False,
                       help="Log the commands but don't run them")
+    parser.add_option('--oc-command', dest="oc", default='oc',
+                      help="Use a custom oc command")
+    parser.add_option('--custom-loader', dest="custom_loader", default=None,
+                      help="Use a custom ld.so")
+    parser.add_option('-D', '--env', dest="env_extra", default='',
+                      help="Pass additional env variables")
 
     (opts, args) = parser.parse_args()
     if len(args) < 2:
@@ -73,6 +92,9 @@ if __name__=="__main__":
         global_verbose_level = max(global_verbose_level, 2) # log all actions
     if opts.verbose:
         global_verbose_level = max(global_verbose_level, 1)
+    if opts.custom_loader is not None:
+        use_custom_loader = True
+        preload_so
 
     # Assemble a description of what's being copied:
     manifest = Manifest()
@@ -98,6 +120,9 @@ if __name__=="__main__":
                 soname = os.path.basename(soname)
             if sopath is None:
                 vlog (1, "# Skipped requirement: {} => None".format(soname))
+                continue
+            if soname in blacklist:
+                vlog (1, "# Blacklisted: {} => {}".format(soname, sopath))
                 continue
             manifest.add_item(soname, sopath)
 
@@ -125,7 +150,9 @@ if __name__=="__main__":
         target_executable = opts.executable
         target_path = os.path.join(target_dir, opts.executable)
 
-        rsync_cmd = ["oc", "rsync"]
+        rsync_cmd = [opts.oc, "rsync"]
+        if global_verbose_level < 3:
+            rsync_cmd += ["-q"] # suppress rsync output
         rsync_cmd += [staging_dir + "/"] # XXX: Trailing slash avoids extra directory.
         rsync_cmd += [opts.target_pod + ":" + target_dir]
         if opts.target_container != '':
@@ -143,14 +170,14 @@ if __name__=="__main__":
         target_executable = run_name + "_" + opts.executable
         target_path = "/tmp/" + target_executable
 
-        cp_cmd = ["oc", "cp"]
+        cp_cmd = [opts.oc, "cp"]
         cp_cmd += [objpath]
         cp_cmd += [opts.target_pod + ":" + target_path]
         if opts.target_container != '':
             cp_cmd += ["-c", opts.target_container]
         system_invoke(cp_cmd)
 
-    exec_cmd = ["oc", "exec"]
+    exec_cmd = [opts.oc, "exec"]
     if opts.stdin and opts.tty:
         exec_cmd += ["-it"]
     elif opts.stdin:
@@ -161,7 +188,18 @@ if __name__=="__main__":
         exec_cmd += ["-c", opts.target_container]
     exec_cmd += [opts.target_pod]
     exec_cmd += ["--"]
-    if target_dir is not None:
-        exec_cmd += ["env", "LD_LIBRARY_PATH=" + target_dir]
+    if target_dir is not None or use_preload or opts.env_extra != '':
+        exec_cmd += ["env"]
+        if target_dir is not None:
+            exec_cmd += ["LD_LIBRARY_PATH=" + target_dir]
+        if opts.env_extra != '':
+            exec_cmd += opts.env_extra.split()
+        if use_custom_loader:
+            # LD_PRELOAD must be used to avoid grabbing the default loader from /lib64:
+            exec_cmd += ["LD_PRELOAD=" + os.path.join(target_dir, preload_so)]
+            exec_cmd += [os.path.join(target_dir, preload_so)]
     exec_cmd += [target_path] + opts.executable_args
-    system_invoke(exec_cmd)
+    try:
+        system_invoke(exec_cmd)
+    except subprocess.CalledProcessError as err:
+        exit(err.returncode)
