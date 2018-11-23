@@ -1,0 +1,5 @@
+- README: discuss why gdbserver on CentOS is wanted even with gdb in some containers
+  - reason 1: we want to use debuginfo provided outside the container
+  - reason 2: we want to use a custom tool that speaks gdbserver protocol, e.g. gdb-strace
+- README: add gdb-strace example when ready
+- solve solvable limitations described in README
