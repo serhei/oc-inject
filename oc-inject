@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+
+import re
+import os
+import hashlib
+import subprocess
+
+from optparse import OptionParser
+
+global_verbose_level = 0
+# global_verbose_level = 1 # option --verbose
+# global_verbose_level = 2 # log all actions
+def vlog(level, *args):
+    if global_verbose_level >= level:
+        print(*args)
+
+# used to parse output of ldd command
+ldd_regex = re.compile(r'^\s*(\S*)(?: => (\S*))? \(.*\)')
+# will recognize 3 kinds of output lines:
+# - <soname> => <path> (<addr>)
+# - <soname> (<addr>)
+# - <path> (<addr>)
+
+class Manifest:
+    def __init__(self):
+        self.sources = [] # list of (obj_name, obj_path) tuples
+        self.signature = "oc-inject v0.0.1"
+        vlog (1, "#", self.signature)
+        self.signature += "\n"
+
+    def add_item(self, objname, objpath):
+        item = (objname, objpath)
+        self.sources.append(item)
+        desc = "Required: {} => {}".format(*item)
+        vlog (1, "#", desc)
+        self.signature += desc + "\n"
+
+    def fingerprint(self):
+        h = hashlib.blake2b(digest_size=4)
+        h.update(bytes(self.signature,'utf-8'))
+        return "oc-inject-" + h.hexdigest()
+
+if __name__=="__main__":
+    usage = "%prog <pod_ID> [-c <container_ID>] <executable>\n" \
+            "%prog <pod_ID> [-c <container_ID>] -- <executable> <args...>\n" \
+            "Copy an executable to an OpenShift container and run the executable."
+    parser = OptionParser(usage=usage)
+    parser.add_option('-c', '--container', dest='target_container', default='',
+                      help="Container name. If omitted, the first container in the pod will be chosen.")
+    parser.add_option('-i', '--stdin', action="store_true", default=False,
+                      help="Pass stdin to the container")
+    parser.add_option('-t', '--tty', action="store_true", default=False,
+                      help="Stdin is a TTY")
+    parser.add_option('-s', '--static', action="store_true", default=False,
+                      help="Treat executable as a static binary (do not copy dependencies)")
+    parser.add_option('-v', '--verbose', action="store_true", default=False,
+                      help="Log the commands used to copy and run the executable")
+    parser.add_option('-n', '--dry-run', action="store_true", default=False,
+                      help="Log the commands but don't run them")
+
+    (opts, args) = parser.parse_args()
+    if len(args) < 2:
+        parser.error("at least 2 arguments required: <pod_ID>, <executable>")
+
+    opts.target_pod = args[0]
+    opts.executable = args[1]
+    opts.executable_args = []
+    if len(args) > 2:
+        opts.executable_args = args[2:]
+
+    if opts.dry_run:
+        opts.verbose = True
+        global_verbose_level = max(global_verbose_level, 2) # log all actions
+    if opts.verbose:
+        global_verbose_level = max(global_verbose_level, 1)
+
+    # Assemble a description of what's being copied:
+    manifest = Manifest()
+
+    # Find the executable:
+    # rc = subprocess.run(["which", opts.executable], capture_output=True, check=True) # XXX: Python 3.7 only
+    rc = subprocess.run(["which", opts.executable], check=True, stdout=subprocess.PIPE)
+    opts.executable_path = rc.stdout.decode("utf-8").strip()
+    manifest.add_item(opts.executable, opts.executable_path)
+
+    # Find required dynamic libraries:
+    if not opts.static:
+        rc = subprocess.run(["ldd", opts.executable_path], check=True,
+                            stdout=subprocess.PIPE, universal_newlines=True)
+        for line in rc.stdout.splitlines():
+            m = ldd_regex.match(line)
+            if m is None: continue
+
+            soname = m.group(1)
+            sopath = m.group(2)
+            if sopath is None and soname[0] == '/':
+                sopath = soname
+                soname = os.path.basename(soname)
+            if sopath is None:
+                vlog (1, "# Skipped requirement: {} => None".format(soname))
+                continue
+            manifest.add_item(soname, sopath)
+
+    run_name = manifest.fingerprint()
+    vlog (1, "# Computed fingerprint:", run_name)
+    # TODO: staging_dir = "/tmp/" + run_name   # on the local system
+    staging_dir = "./" + run_name   # on the local system (for prototyping purposes)
+    target_dir = "/tmp/" + run_name # within the container
+
+    def system_invoke(cmd, log_level=1):
+        vlog(log_level, " ".join(cmd)) # TODO: Assumes arguments have no spaces.
+        if not opts.dry_run:
+            subprocess.run(cmd, check=True)
+
+    if len(manifest.sources) > 1:
+        mkdir_cmd = ["mkdir", "-p", staging_dir]
+        system_invoke(mkdir_cmd, log_level=2)
+
+        if global_verbose_level < 2:
+            vlog(1, "# Copying files to " + staging_dir + "...")
+        for objname, objpath in manifest.sources:
+            cp_cmd = ["cp", objpath, os.path.join(staging_dir, objname)]
+            system_invoke(cp_cmd, log_level=2)
+
+        target_executable = opts.executable
+        target_path = os.path.join(target_dir, opts.executable)
+
+        rsync_cmd = ["oc", "rsync"]
+        rsync_cmd += [staging_dir + "/"] # XXX: Trailing slash avoids extra directory.
+        rsync_cmd += [opts.target_pod + ":" + target_dir]
+        if opts.target_container != '':
+            rsync_cmd += ["-c", opts.target_container]
+        system_invoke(rsync_cmd)
+
+    else:
+        # Only use staging directories when there are multiple objects:
+        staging_dir = None
+        target_dir = None
+
+        objname, objpath = manifest.sources[0]
+        assert(objname == opts.executable)
+
+        target_executable = run_name + "_" + opts.executable
+        target_path = "/tmp/" + target_executable
+
+        cp_cmd = ["oc", "cp"]
+        cp_cmd += [objpath]
+        cp_cmd += [opts.target_pod + ":" + target_path]
+        if opts.target_container != '':
+            cp_cmd += ["-c", opts.target_container]
+        system_invoke(cp_cmd)
+
+    exec_cmd = ["oc", "exec"]
+    if opts.stdin and opts.tty:
+        exec_cmd += ["-it"]
+    elif opts.stdin:
+        exec_cmd += ["-i"]
+    elif opts.tty:
+        exec_cmd += ["-t"]
+    if opts.target_container != '':
+        exec_cmd += ["-c", opts.target_container]
+    exec_cmd += [opts.target_pod]
+    exec_cmd += ["--"]
+    if target_dir is not None:
+        exec_cmd += ["env", "LD_LIBRARY_PATH=" + target_dir]
+    exec_cmd += [target_path] + opts.executable_args
+    system_invoke(exec_cmd)
