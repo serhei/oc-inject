@@ -144,12 +144,23 @@ and older `oc-inject` directories in a container are removed:
   tools that have been tested with `oc-inject`.
 
 - `oc-inject` does not check if suitable shared libraries are already
-  present in the container, instead always copying the entire set of
-  dependencies.
+  present in the container (e.g. from invocations of `oc-inject` with
+  other commands), instead always copying the entire set of
+  dependencies. (However, the fact that `oc-inject` uses `rsync` and a
+  consistent naming scheme for its temporary files does mean that
+  repeated invocations of the same executable will cache and reuse the
+  particular set of shared objects used by that executable.)
 
 - Executables have a number of potential ways to hardcode library
   search paths, e.g. `DT_RPATH` on some systems. If this becomes a
   practical issue, a `chrpath` step can be added to the staging process.
+
+*The following limitations must be investigated further:*
+
+- If the injected executable starts another process (e.g. `strace
+  ls`), the child process will inherit the `LD_LIBRARY_PATH` settings
+  used to run the injected executable and will most likely fail to
+  load.
 
 *The following limitations may be resolved depending on subsequent
 discussions with the OpenShift development teams:*
