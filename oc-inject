@@ -188,13 +188,13 @@ if __name__=="__main__":
         exec_cmd += ["-c", opts.target_container]
     exec_cmd += [opts.target_pod]
     exec_cmd += ["--"]
-    if target_dir is not None or use_preload or opts.env_extra != '':
+    if target_dir is not None or use_custom_loader or opts.env_extra != '':
         exec_cmd += ["env"]
         if target_dir is not None:
             exec_cmd += ["LD_LIBRARY_PATH=" + target_dir]
         if opts.env_extra != '':
             exec_cmd += opts.env_extra.split()
-        if use_custom_loader:
+        if use_custom_loader and target_dir is not None:
             # LD_PRELOAD must be used to avoid grabbing the default loader from /lib64:
             exec_cmd += ["LD_PRELOAD=" + os.path.join(target_dir, preload_so)]
             exec_cmd += [os.path.join(target_dir, preload_so)]
