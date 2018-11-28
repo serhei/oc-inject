@@ -119,7 +119,7 @@ Show detailed debugging output for `ld.so`:
 To reproduce issues cleanly, make sure leftover processes were killed
 and older `oc-inject` directories in a container are removed:
 
-    $ $ oc exec nodejs-ex-1-gsc9q ps
+    $ oc exec myapp-zrblm ps
     PID TTY          TIME CMD
     ... ...           ... ...
     593 ?        00:00:10 ld-linux-x86-64
