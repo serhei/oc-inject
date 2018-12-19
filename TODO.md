@@ -3,3 +3,6 @@
   - reason 2: we want to use a custom tool that speaks gdbserver protocol, e.g. gdb-strace
 - README: add gdb-strace example when ready
 - solve solvable limitations described in README
+- Fedora COPR package
+- Fedora packaging guidelines (e.g. man-page)
+- extend to stapdyn (need to special-case Dyninst_RT.so)
