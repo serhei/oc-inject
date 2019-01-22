@@ -129,8 +129,9 @@ if __name__=="__main__":
     run_name = manifest.fingerprint()
     vlog (1, "# Computed fingerprint:", run_name)
     # TODO: staging_dir = "/tmp/" + run_name   # on the local system
-    staging_dir = "./" + run_name   # on the local system (for prototyping purposes)
-    target_dir = "/tmp/" + run_name # within the container
+    staging_dir = "./" + run_name   # on the local system (use current dir for prototyping purposes)
+    target_rsync_dir = "/tmp/"      # within the container
+    target_dir = target_rsync_dir + run_name # within the container
 
     def system_invoke(cmd, log_level=1):
         vlog(log_level, " ".join(cmd)) # TODO: Assumes arguments have no spaces.
@@ -153,8 +154,8 @@ if __name__=="__main__":
         rsync_cmd = [opts.oc, "rsync"]
         if global_verbose_level < 3:
             rsync_cmd += ["-q"] # suppress rsync output
-        rsync_cmd += [staging_dir + "/"] # XXX: Trailing slash avoids extra directory.
-        rsync_cmd += [opts.target_pod + ":" + target_dir]
+        rsync_cmd += [staging_dir] # XXX: No trailing slash since we specify the parent directory as our target.
+        rsync_cmd += [opts.target_pod + ":" + target_rsync_dir]
         if opts.target_container != '':
             rsync_cmd += ["-c", opts.target_container]
         system_invoke(rsync_cmd)
