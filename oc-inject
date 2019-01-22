@@ -62,13 +62,13 @@ class Manifest:
 
 # Search the output of `ldconfig -p` for an additional so:
 def ldconfig_search(expected_soname):
-    vlog (2, "# Searching ldconfig -p for {}".format(expected_soname))
+    vlog (2, "# Searching ldconfig -p for {}...".format(expected_soname))
     rc = subprocess.run(["ldconfig", "-p", opts.executable_path], check=True,
                         stdout=subprocess.PIPE, universal_newlines=True)
     for line in rc.stdout.splitlines():
         m = ldconfig_regex.match(line)
         if m is None:
-            vlog (2, "# Unknown ldconfig -p output: {}".format(line))
+            vlog (2, "# Found unknown ldconfig -p output: {}".format(line))
             continue
         soname = m.group(1)
         sopath = m.group(3)
@@ -140,12 +140,13 @@ if __name__=="__main__":
 
     # Find required dynamic libraries:
     if not opts.static:
+        vlog (2, "# Searching ldd {}...".format(opts.executable_path))
         rc = subprocess.run(["ldd", opts.executable_path], check=True,
                             stdout=subprocess.PIPE, universal_newlines=True)
         for line in rc.stdout.splitlines():
             m = ldd_regex.match(line)
             if m is None:
-                vlog (2, "# Unknown ldd output: {}".format(line))
+                vlog (2, "# Found unknown ldd output: {}".format(line))
                 continue
 
             soname = m.group(1)
