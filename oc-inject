@@ -47,6 +47,7 @@ class Manifest:
         self.signature += "\n"
 
     def add_item(self, objname, objpath, note=""):
+        # TODO: Option to detect changes (e.g. in stapdyn module) by computing a checksum of the file.
         item = (objname, objpath)
         self.sources.append(item)
         if note != "": note = "(" + note + ")"
@@ -88,6 +89,8 @@ if __name__=="__main__":
                       help="Stdin is a TTY")
     parser.add_option('-s', '--static', action="store_true", default=False,
                       help="Treat executable as a static binary (do not copy dependencies)")
+    parser.add_option('--stapdyn', action="store_true", default=False,
+                      help="Treat executable as a SystemTap/DynInst module (run using stapdyn)")
     parser.add_option('-v', '--verbose', action="store_true", default=False,
                       help="Log the commands used to copy and run the executable")
     parser.add_option('-n', '--dry-run', action="store_true", default=False,
@@ -114,6 +117,11 @@ if __name__=="__main__":
         global_verbose_level = max(global_verbose_level, 2) # log all actions
     if opts.verbose:
         global_verbose_level = max(global_verbose_level, 1)
+    if opts.stapdyn and opts.static:
+        parser.error("--static and --stapdyn options are mutually exclusive")
+    if opts.stapdyn:
+        opts.stapdyn_module = opts.executable
+        opts.executable = "stapdyn"
     if opts.custom_loader is not None:
         use_custom_loader = True
         preload_so = opts.custom_loader
@@ -126,6 +134,9 @@ if __name__=="__main__":
     rc = subprocess.run(["which", opts.executable], check=True, stdout=subprocess.PIPE)
     opts.executable_path = rc.stdout.decode("utf-8").strip()
     manifest.add_item(opts.executable, opts.executable_path)
+    if opts.stapdyn:
+        stapdyn_module_name = os.path.basename(opts.stapdyn_module)
+        manifest.add_item(stapdyn_module_name, opts.stapdyn_module, "stapdyn")
 
     # Find required dynamic libraries:
     if not opts.static:
@@ -165,6 +176,10 @@ if __name__=="__main__":
     staging_dir = "./" + run_name   # on the local system (use current dir for prototyping purposes)
     target_rsync_dir = "/tmp/"      # within the container
     target_dir = target_rsync_dir + run_name # within the container
+
+    if opts.stapdyn:
+        # Pass on any extra arguments to a stapdyn module:
+        opts.executable_args = [os.path.join(target_dir, opts.stapdyn_module)] + opts.executable_args
 
     def system_invoke(cmd, log_level=1):
         vlog(log_level, " ".join(cmd)) # TODO: Assumes arguments have no spaces.
