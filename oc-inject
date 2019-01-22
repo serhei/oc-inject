@@ -94,7 +94,7 @@ if __name__=="__main__":
         global_verbose_level = max(global_verbose_level, 1)
     if opts.custom_loader is not None:
         use_custom_loader = True
-        preload_so
+        preload_so = opts.custom_loader
 
     # Assemble a description of what's being copied:
     manifest = Manifest()
