@@ -151,10 +151,10 @@ if __name__=="__main__":
 
             soname = m.group(1)
             sopath = m.group(2)
-            if sopath is None and soname[0] == '/':
+            if not sopath and soname[0] == '/':
                 sopath = soname
                 soname = os.path.basename(soname)
-            if sopath is None:
+            if not sopath:
                 vlog (1, "# Skipped requirement: {} => None".format(soname))
                 continue
             if soname in blacklist:
