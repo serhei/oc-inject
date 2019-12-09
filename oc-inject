@@ -2,6 +2,7 @@
 
 import re
 import os
+import tempfile
 import hashlib
 import subprocess
 
@@ -99,6 +100,8 @@ if __name__=="__main__":
                       help="Use a custom oc command")
     parser.add_option('--custom-loader', dest="custom_loader", default=None,
                       help="Use a custom ld.so")
+    parser.add_option('-T', '--custom-tmpdir', dest="custom_tmpdir",
+                      default=None, help="Use a custom temporary directory")
     parser.add_option('-D', '--env', dest="env_extra", default='',
                       help="Pass additional env variables")
 
@@ -125,6 +128,10 @@ if __name__=="__main__":
     if opts.custom_loader is not None:
         use_custom_loader = True
         preload_so = opts.custom_loader
+    if opts.custom_tmpdir is not None:
+        tmpdir = opts.custom_tmpdir
+    else:
+        tmpdir = tempfile.gettempdir()
 
     # Assemble a description of what's being copied:
     manifest = Manifest()
@@ -173,9 +180,8 @@ if __name__=="__main__":
 
     run_name = manifest.fingerprint()
     vlog (1, "# Computed fingerprint:", run_name)
-    # TODO: staging_dir = "/tmp/" + run_name   # on the local system
-    staging_dir = "./" + run_name   # on the local system (use current dir for prototyping purposes)
-    target_rsync_dir = "/tmp/"      # within the container
+    staging_dir = os.path.join(tmpdir, run_name) # on the local system
+    target_rsync_dir = "/tmp/" # within the container
     target_dir = target_rsync_dir + run_name # within the container
 
     if opts.stapdyn:
