@@ -42,7 +42,7 @@ preload_so = "ld-linux-x86-64.so.2"
 class Manifest:
     def __init__(self):
         self.sources = [] # list of (obj_name, obj_path) tuples
-        self.signature = "oc-inject v0.0.1"
+        self.signature = "oc-inject v0.0.2"
         vlog (1, "#", self.signature)
         self.signature += "\n"
 
