@@ -11,7 +11,7 @@ the container image.
 
 ## Requirements
 
-`oc-inject` requires Python 3, `ldd`, `ldconfig` and the OpenShift
+`oc-inject` requires Python 3, `ldd`, `ldconfig`, and the OpenShift
 command line tool `oc`. I plan to rewrite the tool in Go once it is
 ready to move beyond a proof-of-concept.
 
