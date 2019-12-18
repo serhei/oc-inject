@@ -161,6 +161,10 @@ if __name__=="__main__":
             if not sopath and soname[0] == '/':
                 sopath = soname
                 soname = os.path.basename(soname)
+            # XXX #9: ldd may return soname in current working directory
+            cwd_sopath = os.path.join('.', soname)
+            if not sopath and os.path.isfile(cwd_sopath):
+                sopath = cwd_sopath
             if not sopath:
                 vlog (1, "# Skipped requirement: {} => None".format(soname))
                 continue
