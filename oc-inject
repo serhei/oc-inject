@@ -210,8 +210,10 @@ if __name__=="__main__":
         target_executable = opts.executable
         target_path = os.path.join(target_dir, opts.executable)
 
-        rsync_cmd = [opts.oc, "rsync"]
-        if global_verbose_level < 3:
+        # #10: `kubectl` has `cp` but not `rsync`
+        is_kube = opts.oc.endswith('kubectl')
+        rsync_cmd = [opts.oc, "cp" if is_kube else "rsync"]
+        if not is_kube and global_verbose_level < 3:
             rsync_cmd += ["-q"] # suppress rsync output
         rsync_cmd += [staging_dir] # XXX: No trailing slash since we specify the parent directory as our target.
         rsync_cmd += [opts.target_pod + ":" + target_rsync_dir]
