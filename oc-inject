@@ -17,14 +17,15 @@ def vlog(level, *args):
         print(*args)
 
 # used to parse output of ldd command
-ldd_regex = re.compile(r'^\s*(\S*)(?: => (\S*))? \(.*\)')
-# will recognize 3 kinds of output lines:
-# - <soname> => <path> (<addr>)
-# - <soname> (<addr>)
-# - <path> (<addr>)
+ldd_regex = re.compile(r'^\s*(?P<soname>\S*)(?: => (?P<sopath>not found|\S*)(?: \((?P<addr2>.*)\))?| \((?P<addr1>.*)\))')
+# will recognize 4 kinds of output lines:
+# - <soname> => <path> (<addr2>)
+# - <soname> => not found
+# - <soname> (<addr1>)
+# - <path> (<addr1>)
 
 # used to parse output of ldconfig -p command
-ldconfig_regex = re.compile(r'^\s*(\S*) \((.*)\) => (\S*)')
+ldconfig_regex = re.compile(r'^\s*(?P<soname>\S*) \((?P<notes>.*)\) => (?P<sopath>\S*)')
 # will recognize:
 # - <soname> (<notes>) => <path>
 
@@ -71,8 +72,8 @@ def ldconfig_search(expected_soname):
         if m is None:
             vlog (2, "# Found unknown ldconfig -p output: {}".format(line))
             continue
-        soname = m.group(1)
-        sopath = m.group(3)
+        soname = m.group('soname')
+        sopath = m.group('sopath')
         if soname == expected_soname:
             return sopath
     return None
@@ -156,8 +157,12 @@ if __name__=="__main__":
                 vlog (2, "# Found unknown ldd output: {}".format(line))
                 continue
 
-            soname = m.group(1)
-            sopath = m.group(2)
+            soname = m.group('soname')
+            sopath = m.group('sopath')
+
+            if sopath == 'not found':
+                vlog (0, "# WARNING: {} expected but not found in library search path.")
+
             if not sopath and soname[0] == '/':
                 sopath = soname
                 soname = os.path.basename(soname)
