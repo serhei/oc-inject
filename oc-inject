@@ -40,7 +40,7 @@ java_properties_regex = re.compile(r'(?P<var>java\.home|sun\.boot\.library\.path
 # smart idea to mix .so's from two systems in the same executable, but
 # you never know.
 blacklist = []
-blacklist_jdk = ["libc.so.6", "libdl.so.2", "libpthread.so.0"]
+blacklist_jdk = ["ld-linux-x86-64.so.2", "libc.so.6", "libdl.so.2", "libpthread.so.0"]
 # e.g. blacklist = ["libc.so.6", "libstdc++.so.6", "libpthread.so.0", "libdl.so.2"]
 # TODO: This could be a list of glob patterns.
 
