@@ -80,7 +80,7 @@ def ldconfig_search(expected_soname):
 
 if __name__=="__main__":
     usage = "%prog <pod_ID> [-c <container_ID>] <executable>\n" \
-            "       prog <pod_ID> [-c <container_ID>] -- <executable> <args...>\n" \
+            "       %prog <pod_ID> [-c <container_ID>] -- <executable> <args...>\n" \
             "Copy an executable to an OpenShift container and run the executable."
     parser = OptionParser(usage=usage)
     parser.add_option('-c', '--container', dest='target_container', default='',
