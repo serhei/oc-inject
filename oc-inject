@@ -29,11 +29,18 @@ ldconfig_regex = re.compile(r'^\s*(?P<soname>\S*) \((?P<notes>.*)\) => (?P<sopat
 # will recognize:
 # - <soname> (<notes>) => <path>
 
+# used to parse output of java -XshowSettings:properties -version command
+java_properties_regex = re.compile(r'(?P<var>java\.home|sun\.boot\.library\.path) = (?P<path>.*)')
+# will recognize:
+#   java.home = <path>
+#   sun.boot.library.path = <path>
+
 # TODO: Consider adding a command line option to blacklist modules, to
 # force usage of the so's already in the container. Not generally a
 # smart idea to mix .so's from two systems in the same executable, but
 # you never know.
 blacklist = []
+blacklist_jdk = ["libc.so.6", "libdl.so.2", "libpthread.so.0"]
 # e.g. blacklist = ["libc.so.6", "libstdc++.so.6", "libpthread.so.0", "libdl.so.2"]
 # TODO: This could be a list of glob patterns.
 
@@ -44,18 +51,41 @@ preload_so = "ld-linux-x86-64.so.2"
 class Manifest:
     def __init__(self):
         self.sources = [] # list of (obj_name, obj_path) tuples
+        self.target_paths = {} # dict (obj_name, obj_path) -> target_path
         self.signature = "oc-inject v0.0.2"
         vlog (1, "#", self.signature)
         self.signature += "\n"
 
-    def add_item(self, objname, objpath, note=""):
+    def add_item(self, objname, objpath, note="", target_path=None):
         # TODO: Option to detect changes (e.g. in stapdyn module) by computing a checksum of the file.
         item = (objname, objpath)
+        if item in self.target_paths:
+            return # XXX already added
         self.sources.append(item)
+        self.set_target_path(objname, objpath, target_path)
         if note != "": note = "(" + note + ")"
         desc = "Required" + note + ": {} => {}".format(*item)
         vlog (1, "#", desc)
         self.signature += desc + "\n"
+
+    def clear_all(self, blacklist):
+        i = len(self.sources) - 1
+        while i >= 0:
+            objname, _objpath = self.sources[i]
+            if objname in blacklist:
+                del self.sources[i]
+            i -= 1
+
+    def set_target_path(self, objname, objpath, target_path):
+        item = (objname, objpath)
+        self.target_paths[item] = target_path
+
+    def get_target_path(self, objname, objpath):
+        item = (objname, objpath)
+        if item not in self.target_paths \
+           or self.target_paths[item] is None:
+            return objname
+        return self.target_paths[item]
 
     def fingerprint(self):
         h = hashlib.blake2b(digest_size=4)
@@ -78,6 +108,108 @@ def ldconfig_search(expected_soname):
             return sopath
     return None
 
+def find_shared_libraries(manifest, opts):
+    global blacklist, use_custom_loader
+
+    # #8: Enable additional search path for Java libraries.
+    env = os.environ.copy()
+    if opts.java:
+        java_home, java_library_path = find_jdk_libraries()
+        jli_path = os.path.join(java_library_path, 'jli')
+        ld_library_path = env['LD_LIBRARY_PATH']
+        if len(ld_library_path) > 0:
+            ld_library_path = ":" + ld_library_path
+        env['LD_LIBRARY_PATH'] = jli_path + ld_library_path
+
+    # #8: XXX Unfortunately java does not like to be loaded via
+    # an explicit ld-linux-x86-64.so.2 invocation. This requires
+    # us to use the container ld-linux *and* associated glibc.
+    if opts.java and opts.custom_loader is None:
+        use_custom_loader = False
+        blacklist += blacklist_jdk
+
+        # XXX Libraries could have been added previously, remove them.
+        # This leaves excess libraries in the 'manifest' string,
+        # but that's not a problem for how it's being used:
+        manifest.clear_all(blacklist_jdk)
+
+    rc = subprocess.run(["ldd", opts.executable_path], env=env, check=True,
+                        stdout=subprocess.PIPE, universal_newlines=True)
+    for line in rc.stdout.splitlines():
+        m = ldd_regex.match(line)
+        if m is None:
+            vlog (2, "# Found unknown ldd output: {}".format(line))
+            continue
+
+        soname = m.group('soname')
+        sopath = m.group('sopath')
+
+        if not opts.java and soname == 'libjli.so' and sopath == 'not found':
+            opts.java = True
+            vlog (1, "# Executable requires libjli.so, retrying with JDK support enabled...\n")
+            find_shared_libraries(manifest, opts)
+            return
+        elif sopath == 'not found':
+            vlog (0, "# WARNING: {} expected but not found in library search path.")
+
+        if not sopath and soname[0] == '/':
+            sopath = soname
+            soname = os.path.basename(soname)
+        # XXX #9: ldd may return soname in current working directory
+        cwd_sopath = os.path.join('.', soname)
+        if not sopath and os.path.isfile(cwd_sopath):
+            sopath = cwd_sopath
+        if not sopath:
+            vlog (1, "# Skipped requirement: {} => None".format(soname))
+            continue
+        if soname in blacklist:
+            vlog (1, "# Blacklisted: {} => {}".format(soname, sopath))
+            continue
+        manifest.add_item(soname, sopath)
+
+        # Special case for tools relying on DynInst:
+        if soname.startswith("libdyninstAPI.so"):
+            soname_rt = soname.replace("libdyninstAPI.so","libdyninstAPI_RT.so")
+            sopath_rt = ldconfig_search(soname_rt)
+            if sopath_rt is None:
+                vlog (0, "# WARNING: requested {} but matching {} not found".format(soname, soname_rt))
+            else:
+                manifest.add_item(soname_rt, sopath_rt, "stapdyn")
+
+_java_home = None
+_java_library_path = None
+_java_NOT_FOUND = False
+def find_jdk_libraries():
+    global _java_home, _java_library_path, _java_NOT_FOUND
+    if _java_NOT_FOUND or \
+       (_java_home is not None \
+       and _java_library_path is not None):
+        return _java_home, _java_library_path
+
+    rc = subprocess.run(["java", "-XshowSettings:properties", "-version"],
+                        check=True, stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT, universal_newlines=True)
+    for line in rc.stdout.splitlines():
+        # TODO: Parse JDK version, warn on mismatch with container Java version.
+        m = java_properties_regex.search(line)
+        if m is None: continue
+        if m.group('var') == 'java.home':
+            _java_home = m.group('path')
+        else: # XXX m.group('var') == 'sun.boot.library.path'
+            _java_library_path = m.group('path')
+        if _java_home is not None \
+           and _java_library_path is not None:
+            break
+
+    if _java_home is None:
+        vlog (0, "# ERROR: Did not find java.home in output of java -XshowSettings:properties -version")
+        _java_NOT_FOUND = True
+    if _java_library_path is None:
+        vlog (0, "# ERROR: Did not find sun.boot.library.path in output of java -XshowSettings:properties -version")
+        _java_NOT_FOUND = True
+
+    return _java_home, _java_library_path
+
 if __name__=="__main__":
     usage = "%prog <pod_ID> [-c <container_ID>] <executable>\n" \
             "       %prog <pod_ID> [-c <container_ID>] -- <executable> <args...>\n" \
@@ -91,6 +223,8 @@ if __name__=="__main__":
                       help="Stdin is a TTY")
     parser.add_option('-s', '--static', action="store_true", default=False,
                       help="Treat executable as a static binary (do not copy dependencies)")
+    parser.add_option('--java', action="store_true", default=False,
+                      help="Treat executable as a JDK tool (load additional Java libraries)")
     parser.add_option('--stapdyn', action="store_true", default=False,
                       help="Treat executable as a SystemTap/DynInst module (run using stapdyn)")
     parser.add_option('-v', '--verbose', action="store_true", default=False,
@@ -123,6 +257,10 @@ if __name__=="__main__":
         global_verbose_level = max(global_verbose_level, 1)
     if opts.stapdyn and opts.static:
         parser.error("--static and --stapdyn options are mutually exclusive")
+    if opts.java and opts.static:
+        parser.error("--static and --java options are mutually exclusive")
+    if opts.java and opts.stapdyn:
+        parser.error("--java and --stapdyn options are mutually exclusive")
     if opts.stapdyn:
         opts.stapdyn_module = opts.executable
         opts.executable = "stapdyn"
@@ -142,50 +280,35 @@ if __name__=="__main__":
     rc = subprocess.run(["which", opts.executable], check=True, stdout=subprocess.PIPE)
     opts.executable_path = rc.stdout.decode("utf-8").strip()
     manifest.add_item(opts.executable, opts.executable_path)
+    target_executable_path = opts.executable
     if opts.stapdyn:
         stapdyn_module_name = os.path.basename(opts.stapdyn_module)
         manifest.add_item(stapdyn_module_name, opts.stapdyn_module, "stapdyn")
 
-    # Find required dynamic libraries:
+    # Find required shared libraries:
     if not opts.static:
-        vlog (2, "# Searching ldd {}...".format(opts.executable_path))
-        rc = subprocess.run(["ldd", opts.executable_path], check=True,
-                            stdout=subprocess.PIPE, universal_newlines=True)
-        for line in rc.stdout.splitlines():
-            m = ldd_regex.match(line)
-            if m is None:
-                vlog (2, "# Found unknown ldd output: {}".format(line))
-                continue
+        vlog(2, "# Searching ldd {}...".format(opts.executable_path))
+        find_shared_libraries(manifest, opts)
 
-            soname = m.group('soname')
-            sopath = m.group('sopath')
+    # Special case for tools relying on Java:
+    if opts.java:
+        target_executable_path = os.path.join('bin', opts.executable)
+        manifest.set_target_path(opts.executable, opts.executable_path, \
+                                 target_executable_path)
+        desc = "{} --> {}".format(opts.executable, target_executable_path)
+        vlog (1, "#", desc)
+        manifest.signature += desc + "\n"
 
-            if sopath == 'not found':
-                vlog (0, "# WARNING: {} expected but not found in library search path.")
-
-            if not sopath and soname[0] == '/':
-                sopath = soname
-                soname = os.path.basename(soname)
-            # XXX #9: ldd may return soname in current working directory
-            cwd_sopath = os.path.join('.', soname)
-            if not sopath and os.path.isfile(cwd_sopath):
-                sopath = cwd_sopath
-            if not sopath:
-                vlog (1, "# Skipped requirement: {} => None".format(soname))
-                continue
-            if soname in blacklist:
-                vlog (1, "# Blacklisted: {} => {}".format(soname, sopath))
-                continue
-            manifest.add_item(soname, sopath)
-
-            # Special case for tools relying on DynInst:
-            if soname.startswith("libdyninstAPI.so"):
-                soname_rt = soname.replace("libdyninstAPI.so","libdyninstAPI_RT.so")
-                sopath_rt = ldconfig_search(soname_rt)
-                if sopath_rt is None:
-                    vlog (0, "# WARNING: requested {} but matching {} not found".format(soname, soname_rt))
-                else:
-                    manifest.add_item(soname_rt, sopath_rt, "stapdyn")
+        # XXX: May only need to copy a subset of these directories,
+        # but predicting which jars may be needed is difficult.
+        java_home, _IGNORE = find_jdk_libraries()
+        # XXX: If java_home is j/jre, we need j/lib, j/jre/lib
+        jdk_lib_path = os.path.join(java_home, '../lib')
+        manifest.add_item('@JAVA_HOME@/../lib', jdk_lib_path, \
+                          target_path='lib')
+        jdk_jre_lib_path = os.path.join(java_home, 'lib')
+        manifest.add_item('@JAVA_HOME@/lib', jdk_jre_lib_path, \
+                          target_path='jre/lib')
 
     run_name = manifest.fingerprint()
     vlog (1, "# Computed fingerprint:", run_name)
@@ -209,11 +332,22 @@ if __name__=="__main__":
         if global_verbose_level < 2:
             vlog(1, "# Copying files to " + staging_dir + "...")
         for objname, objpath in manifest.sources:
-            cp_cmd = ["cp", objpath, os.path.join(staging_dir, objname)]
+            obj_target_path = manifest.get_target_path(objname, objpath)
+            obj_target_path = os.path.join(staging_dir, obj_target_path)
+            if os.path.exists(obj_target_path):
+                continue
+            obj_target_dir = os.path.dirname(obj_target_path)
+            if not os.path.isdir(obj_target_dir):
+                mkdir_cmd = ["mkdir", "-p", obj_target_dir]
+                system_invoke(mkdir_cmd, log_level=2)
+            cp_cmd = ["cp"]
+            if os.path.isdir(objpath):
+                cp_cmd += ["-r"]
+            cp_cmd += [objpath, obj_target_path]
             system_invoke(cp_cmd, log_level=2)
 
-        target_executable = opts.executable
-        target_path = os.path.join(target_dir, opts.executable)
+        target_executable_path = \
+            os.path.join(target_dir, target_executable_path)
 
         # #10: `kubectl` has `cp` but not `rsync`
         is_kube = opts.oc.endswith('kubectl')
@@ -232,10 +366,12 @@ if __name__=="__main__":
         target_dir = None
 
         objname, objpath = manifest.sources[0]
+
         assert(objname == opts.executable)
+        assert(target_executable_path == opts.executable)
 
         target_executable = run_name + "_" + opts.executable
-        target_path = "/tmp/" + target_executable
+        target_executable_path = "/tmp/" + target_executable
 
         cp_cmd = [opts.oc, "cp"]
         cp_cmd += [objpath]
@@ -265,7 +401,7 @@ if __name__=="__main__":
             # LD_PRELOAD must be used to avoid grabbing the default loader from /lib64:
             exec_cmd += ["LD_PRELOAD=" + os.path.join(target_dir, preload_so)]
             exec_cmd += [os.path.join(target_dir, preload_so)]
-    exec_cmd += [target_path] + opts.executable_args
+    exec_cmd += [target_executable_path] + opts.executable_args
     try:
         system_invoke(exec_cmd)
     except subprocess.CalledProcessError as err:
