@@ -1,11 +1,11 @@
 Name:           oc-inject
-Version:        0.0.2
+Version:        0.0.3
 Release:        1%{?dist}
 Summary:        Copy an executable to an OpenShift container and run it
 
 License:        ASL 2.0
 URL:            https://github.com/serhei/oc-inject
-Source0:        https://github.com/serhei/oc-inject/archive/v0.0.2.tar.gz
+Source0:        https://github.com/serhei/oc-inject/archive/v0.0.3.tar.gz
 
 #BuildRequires:  
 BuildArch:      noarch
@@ -41,6 +41,9 @@ cp -a README.md %{buildroot}%{_pkgdocdir}
 
 
 %changelog
+* Mon Feb 10 2020 Serhei Makarov <me@serhei.io> - 0.0.3-1
+- Updated version with rudimentary support for JDK tools.
+
 * Wed Dec 11 2019 Serhei Makarov <me@serhei.io> - 0.0.2-1
 - Updated version for Red Hat Developer Blog demos.
 
