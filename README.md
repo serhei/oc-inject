@@ -12,12 +12,19 @@ the container image.
 ## Requirements
 
 `oc-inject` requires Python 3, `ldd`, `ldconfig`, and the OpenShift
-command line tool `oc`. I plan to rewrite the tool in Go once it is
+command line tool `oc`. I may rewrite the tool in Go once it is
 ready to move beyond a proof-of-concept.
 
 ## Examples
 
-**1)** `gdbserver` is included in RHEL-based container images on enterprise
+**1)** `strace` is a convenient tool for printing syscalls
+made by a process. The following command installs `strace` into the
+first container in `myapp-zrblm` and invokes it to trace all syscalls
+made by the process with PID `414`:
+
+    $ oc-inject -it myapp-zrblm -- strace -p 414
+
+**2)** `gdbserver` is included in RHEL-based container images on enterprise
 OpenShift, but is not available in CentOS-based images (this is a
 [known
 issue](https://github.com/CentOS/sig-cloud-instance-build/issues/140)).
@@ -33,7 +40,9 @@ with PID `23`:
     (gdb) attach 23
     (gdb) thread apply all bt
 
-**2)** Suppose we are curious to use [`iperf3`](https://iperf.fr/) to check the network bitrate to/from a Minishift container. After installing the `iperf3` package, we launch an `iperf3` test between the container and a host of our choice:
+**3)** Suppose we are curious to use [`iperf3`](https://iperf.fr/) to check
+the network bitrate to/from a Minishift container. After installing the `iperf3`
+package, we launch an `iperf3` test between the container and a host of our choice:
 
     myhost.mydomain$ iperf3 -s -1
     -----------------------------------------------------------
@@ -61,7 +70,9 @@ with PID `23`:
     
     iperf Done.
 
-(Note that in order to run an `iperf3` test like this, the container must be able to route to `myhost.mydomain`. This happens to be true by default on the Minishift setup I was testing with.)
+(Note that in order to run an `iperf3` test like this, the container must be able
+to route to `myhost.mydomain`. This happens to be true by default on the
+Minishift setup I was testing with.)
 
 Or, in the other direction using `oc port-forward`:
 
@@ -81,7 +92,8 @@ Or, in the other direction using `oc port-forward`:
 be tested. The following recipes may help troubleshoot why it's not
 working for you.
 
-Needless to say, the system you are copying the executable from and the target container must be running on compatible processor architectures.
+Needless to say, the system you are copying the executable from and the
+target container must be running on compatible processor architectures.
 
 Dry-run mode, shows full list of commands that would be executed:
 
