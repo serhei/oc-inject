@@ -12,8 +12,11 @@ the container image.
 ## Requirements
 
 `oc-inject` requires Python 3, `ldd`, `ldconfig`, and the OpenShift
-command line tool `oc`. I may rewrite the tool in Go once it is
-ready to move beyond a proof-of-concept.
+command line tool `oc`. (I may rewrite the tool in Go once it is
+ready to move beyond a proof-of-concept.) Generating the man page
+requires `pandoc` and is done as follows:
+
+    pandoc --standalone --to man oc-inject.1.md -o oc-inject.1
 
 ## Examples
 
