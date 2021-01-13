@@ -18,11 +18,20 @@ requires `pandoc` and is done as follows:
 
     pandoc --standalone --to man oc-inject.1.md -o oc-inject.1
 
+`oc-inject` collects an executable from the local system together with
+the minimal dependencies (shared libraries and `ld.so` loader binary)
+required to run it, then copies the executable and dependencies
+into an OpenShift container by invoking `oc cp`.
+`oc-inject` then runs the executable by invoking `oc exec`. 
+This can be used to install and run basic debugging tools such as
+`gdbserver` and `strace` into running containers that would
+otherwise lack debugging facilities.
+
 ## Examples
 
 **1)** `strace` is a convenient tool for printing syscalls
 made by a process. The following command installs `strace` into the
-first container in `myapp-zrblm` and invokes it to trace all syscalls
+first container in pod `myapp-zrblm` and invokes it to trace all syscalls
 made by the process with PID `414`:
 
     $ oc-inject -it myapp-zrblm -- strace -p 414

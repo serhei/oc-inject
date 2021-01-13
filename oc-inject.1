@@ -22,3 +22,91 @@ Copy an executable into an OpenShift container and run the executable.
 \f[B]oc-inject\f[R] is a tool for last-resort troubleshooting of a
 running container, when a required debugging tool is not present in the
 container image.
+.PP
+\f[B]oc-inject\f[R] collects an executable from the local system
+together with the minimal dependencies (shared libraries and
+\f[B]ld.so\f[R] loader binary) required to run it, then copies the
+executable and dependencies into an OpenShift container by invoking
+\f[B]oc cp\f[R].
+\f[B]oc-inject\f[R] then runs the executable by invoking \f[B]oc
+exec\f[R].
+This can be used to install and run basic debugging tools such as
+\f[B]gdbserver\f[R] and \f[B]strace\f[R] into running containers that
+would otherwise lack debugging facilities.
+.SH EXAMPLES
+.PP
+The following command installs \f[B]strace\f[R] from the local machine
+into the first container in pod \f[I]myapp-zrblm\f[R] and invokes it to
+trace all syscalls made by the process with PID \f[I]414\f[R]:
+.IP
+.nf
+\f[C]
+$ oc-inject -it myapp-zrblm -- strace -p 414
+\f[R]
+.fi
+.PP
+The following commands install the \f[B]gdbserver\f[R] executable from
+the local machine into the first container in pod \f[I]myapp-zrblm\f[R]
+and request a backtrace of all threads in the process with PID
+\f[I]23\f[R]:
+.IP
+.nf
+\f[C]
+$ gdb
+(gdb) target extended-remote | ./oc-inject -i myapp-zrblm -- gdbserver --multi -
+(gdb) attach 23
+(gdb) thread apply all bt
+\f[R]
+.fi
+.SH OPTIONS
+.TP
+-c \f[I]container-ID\f[R], --container \f[I]container-ID\f[R]
+Name of target container in the pod.
+If omitted, the first container in the pod will be chosen.
+.TP
+--custom-loader \f[I]custom-loader\f[R]
+Use a custom loader binary instead of \f[B]ld.so\f[R].
+.TP
+-h, --help
+Show a help message and exit.
+.TP
+-i, --stdin
+For interactive programs: pass stdin to the container.
+.TP
+--java
+Treat executable as a JDK tool: copy and load additional Java libraries.
+.TP
+-n, --dry-run
+Output the \f[B]oc\f[R] commands that would be used to copy and run the
+executable, but do not execute them.
+.TP
+--oc-command \f[I]oc\f[R]
+Use a custom command instead of \f[B]oc\f[R] to access the container.
+For example, use \f[B]--oc-command=kubectl\f[R] to access a Kubernetes
+container.
+.TP
+-s, --static
+Treat executable as a static binary: do not copy any dependencies.
+.TP
+-t, --tty
+For interactive programs: treat stdin passed to the container as a TTY.
+.TP
+-T \f[I]custom-tmpdir\f[R], --custom-tmpdir \f[I]custom-tmpdir\f[R]
+Use a custom temporary directory for collecting the executable and
+dependencies.
+.TP
+-v, --verbose
+Output the \f[B]oc\f[R] commands used to copy and run the executable.
+.SH BUGS
+.PP
+See GitHub Issues: <https://github.com/serhei/oc-inject/issues>
+.SH AUTHORS
+.PP
+Serhei Makarov <smakarov@redhat.com>
+.SH WWW
+.PP
+https://github.com/serhei/oc-inject
+.SH SEE ALSO
+.PP
+\f[B]oc(1)\f[R], \f[B]oc-exec(1)\f[R], \f[B]kubectl(1)\f[R],
+\f[B]ldd(1)\f[R], \f[B]ld.so(8)\f[R]
