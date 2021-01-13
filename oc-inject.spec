@@ -1,5 +1,5 @@
 Name:           oc-inject
-Version:        0.0.3
+Version:        0.0.8
 Release:        1%{?dist}
 Summary:        Copy an executable to an OpenShift container and run it
 
