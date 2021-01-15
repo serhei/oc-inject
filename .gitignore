@@ -1,4 +1,4 @@
-# temporary staging directories produced by oc-inject:
+# release tarballs & temporary staging directories produced by oc-inject:
 oc-inject-*
 
 # temporary files produced by stap:
