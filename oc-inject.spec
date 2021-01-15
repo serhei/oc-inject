@@ -1,13 +1,13 @@
 Name:           oc-inject
-Version:        0.0.8
+Version:        0.7.9
 Release:        1%{?dist}
 Summary:        Copy an executable to an OpenShift container and run it
 
 License:        ASL 2.0
 URL:            https://github.com/serhei/oc-inject
-Source0:        https://github.com/serhei/oc-inject/archive/v0.0.3.tar.gz
+Source0:        https://github.com/serhei/oc-inject/archive/oc-inject-0.7.9.tar.gz
 
-#BuildRequires:  
+#BuildRequires:  pandoc
 BuildArch:      noarch
 Requires:       python3
 
@@ -27,20 +27,28 @@ the container image.
 
 
 %install
-rm -rf $RPM_BUILD_ROOT
 mkdir -p %{buildroot}%{_bindir}
 cp -a oc-inject %{buildroot}%{_bindir}
+chmod 0755 %{buildroot}%{_bindir}/oc-inject
+mkdir -p %{buildroot}%{_mandir}/man1
+cp -a oc-inject.1 %{buildroot}%{_mandir}/man1/oc-inject.1
+sed -i "s/VERSION/%{version}/g" %{buildroot}%{_mandir}/man1/oc-inject.1
+chmod 0644 %{buildroot}%{_mandir}/man1/oc-inject.1
 mkdir -p %{buildroot}%{_pkgdocdir}
 cp -a README.md %{buildroot}%{_pkgdocdir}
 
 %files
 %{_bindir}/oc-inject
+%{_mandir}/man1/oc-inject.1.*
+
 %license LICENSE
 %doc README.md
 
-
-
 %changelog
+* Fri Jan 15 2021 Serhei Makarov <me@serhei.io> - 0.7.9-1
+- Draft version for Fedora package review.
+- Added man page, updated install procedure.
+
 * Mon Feb 10 2020 Serhei Makarov <me@serhei.io> - 0.0.3-1
 - Updated version with rudimentary support for JDK tools.
 
