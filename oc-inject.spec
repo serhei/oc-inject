@@ -1,6 +1,6 @@
 Name:           oc-inject
 Version:        0.7.9
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Copy an executable to an OpenShift container and run it
 
 License:        ASL 2.0
@@ -45,6 +45,9 @@ cp -a README.md %{buildroot}%{_pkgdocdir}
 %doc README.md
 
 %changelog
+* Wed Jan 20 2021 Serhei Makarov <me@serhei.io> - 0.7.9-2
+- Fix Source0 URL.
+
 * Fri Jan 15 2021 Serhei Makarov <me@serhei.io> - 0.7.9-1
 - Draft version for Fedora package review.
 - Added man page, updated install procedure.
