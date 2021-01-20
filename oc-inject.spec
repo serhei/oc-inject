@@ -5,7 +5,7 @@ Summary:        Copy an executable to an OpenShift container and run it
 
 License:        ASL 2.0
 URL:            https://github.com/serhei/oc-inject
-Source0:        https://github.com/serhei/oc-inject/archive/oc-inject-0.7.9.tar.gz
+Source0:        https://github.com/serhei/oc-inject/releases/download/v0.7.9/oc-inject-0.7.9.tar.gz
 
 #BuildRequires:  pandoc
 BuildArch:      noarch
