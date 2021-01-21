@@ -1,6 +1,6 @@
 Name:           oc-inject
 Version:        0.7.9
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Copy an executable to an OpenShift container and run it
 
 License:        ASL 2.0
@@ -9,7 +9,9 @@ Source0:        https://github.com/serhei/oc-inject/releases/download/v0.7.9/oc-
 
 #BuildRequires:  pandoc
 BuildArch:      noarch
-Requires:       python3
+Requires:       python3, origin-clients
+#Requires:      kubernetes-client
+Suggests:       java
 
 %description
 Copy an executable to an OpenShift container and run the executable.
@@ -45,6 +47,10 @@ cp -a README.md %{buildroot}%{_pkgdocdir}
 %doc README.md
 
 %changelog
+* Thu Jan 21 2021 Serhei Makarov <me@serhei.io> - 0.7.9-3
+- Add dependency on origin-clients (oc).
+- Note soft dependency on Java runtime environment.
+
 * Wed Jan 20 2021 Serhei Makarov <me@serhei.io> - 0.7.9-2
 - Fix Source0 URL.
 

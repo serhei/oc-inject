@@ -52,7 +52,8 @@ class Manifest:
     def __init__(self):
         self.sources = [] # list of (obj_name, obj_path) tuples
         self.target_paths = {} # dict (obj_name, obj_path) -> target_path
-        self.signature = "oc-inject v0.0.2"
+        # TODO: Replace version during install process:
+        self.signature = "oc-inject v0.7.9"
         vlog (1, "#", self.signature)
         self.signature += "\n"
 
@@ -304,6 +305,7 @@ if __name__=="__main__":
         java_home, _IGNORE = find_jdk_libraries()
         # XXX: If java_home is j/jre, we need j/lib, j/jre/lib
         jdk_lib_path = os.path.join(java_home, '../lib')
+        # XXX: @JAVA_HOME@ is just a label for debugging purposes:
         manifest.add_item('@JAVA_HOME@/../lib', jdk_lib_path, \
                           target_path='lib')
         jdk_jre_lib_path = os.path.join(java_home, 'lib')
