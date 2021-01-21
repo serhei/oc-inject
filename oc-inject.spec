@@ -9,9 +9,12 @@ Source0:        https://github.com/serhei/oc-inject/releases/download/v0.7.9/oc-
 
 #BuildRequires:  pandoc
 BuildArch:      noarch
-Requires:       python3, origin-clients
-#Requires:      kubernetes-client
+Requires:       python3
+%if 0%{?fedora}
+Recommends:     origin-clients
+#Recommends:      kubernetes-client
 Suggests:       java
+%endif
 
 %description
 Copy an executable to an OpenShift container and run the executable.
