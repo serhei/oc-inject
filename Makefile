@@ -14,6 +14,7 @@ oc-inject.1: oc-inject.1.md
 	pandoc --standalone --to man oc-inject.1.md -o oc-inject.1
 
 clean:
+	rm -f oc-inject-$(VERSION).tar.gz
 
 dist: clean
 	mkdir -p oc-inject-$(VERSION)
