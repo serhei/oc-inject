@@ -372,12 +372,12 @@ if __name__=="__main__":
         assert(objname == opts.executable)
         assert(target_executable_path == opts.executable)
 
-        target_executable = run_name + "_" + opts.executable
+        target_executable = run_name + "_" + os.path.basename(opts.executable)
         target_executable_path = "/tmp/" + target_executable
 
         cp_cmd = [opts.oc, "cp"]
         cp_cmd += [objpath]
-        cp_cmd += [opts.target_pod + ":" + target_path]
+        cp_cmd += [opts.target_pod + ":" + target_executable_path]
         if opts.target_container != '':
             cp_cmd += ["-c", opts.target_container]
         system_invoke(cp_cmd)
