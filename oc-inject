@@ -280,8 +280,9 @@ if __name__=="__main__":
     # rc = subprocess.run(["which", opts.executable], capture_output=True, check=True) # XXX: Python 3.7 only
     rc = subprocess.run(["which", opts.executable], check=True, stdout=subprocess.PIPE)
     opts.executable_path = rc.stdout.decode("utf-8").strip()
-    manifest.add_item(opts.executable, opts.executable_path)
-    target_executable_path = opts.executable
+    opts.executable_name = os.path.basename(opts.executable_path)
+    manifest.add_item(opts.executable_name, opts.executable_path)
+    target_executable_path = opts.executable_name # add prefix in later steps
     if opts.stapdyn:
         stapdyn_module_name = os.path.basename(opts.stapdyn_module)
         manifest.add_item(stapdyn_module_name, opts.stapdyn_module, "stapdyn")
@@ -293,10 +294,10 @@ if __name__=="__main__":
 
     # Special case for tools relying on Java:
     if opts.java:
-        target_executable_path = os.path.join('bin', opts.executable)
-        manifest.set_target_path(opts.executable, opts.executable_path, \
+        target_executable_path = os.path.join('bin', opts.executable_name)
+        manifest.set_target_path(opts.executable_name, opts.executable_path, \
                                  target_executable_path)
-        desc = "{} --> {}".format(opts.executable, target_executable_path)
+        desc = "{} --> {}".format(opts.executable_name, target_executable_path)
         vlog (1, "#", desc)
         manifest.signature += desc + "\n"
 
@@ -369,10 +370,10 @@ if __name__=="__main__":
 
         objname, objpath = manifest.sources[0]
 
-        assert(objname == opts.executable)
-        assert(target_executable_path == opts.executable)
+        assert(objname == opts.executable_name)
+        assert(target_executable_path == opts.executable_name)
 
-        target_executable = run_name + "_" + os.path.basename(opts.executable)
+        target_executable = run_name + "_" + opts.executable_name
         target_executable_path = "/tmp/" + target_executable
 
         cp_cmd = [opts.oc, "cp"]
